@@ -310,6 +310,8 @@ def dashboard():
       <div id="cesiumContainer"></div>
       <div class="map-tools">
         <button id="follow" class="ghost">Chase Drone</button>
+        <button id="pause" class="ghost">Pause</button>
+        <button id="stop" class="ghost">Stop</button>
         <button id="return-home" class="ghost">Return Home</button>
       </div>
       <div id="scene-badge" class="scene-badge">3D scene loading</div>
@@ -322,6 +324,13 @@ def dashboard():
         <label for="request">User request</label>
         <textarea id="request">Fly to the Ferry Building and stop there safely</textarea>
         <button id="run">Start Prompted Flight</button><button id="demo" class="secondary">Demo Ferry Flight</button>
+        <label>Manual start position</label>
+        <div class="telemetry">
+          <div><div class="label">Start Lat</div><input id="start-lat" value="37.7749" /></div>
+          <div><div class="label">Start Lon</div><input id="start-lon" value="-122.4194" /></div>
+          <div><div class="label">Alt m</div><input id="start-alt" value="1.83" /></div>
+          <div><button id="set-start">Set Start</button></div>
+        </div>
         <section class="telemetry">
           <div><div class="label">Lat</div><strong id="lat">...</strong></div>
           <div><div class="label">Lon</div><strong id="lon">...</strong></div>
@@ -379,7 +388,7 @@ def dashboard():
       // Keep the browser chase camera stable. The real simulator altitude is
       // shown in telemetry; Google photogrammetry heights stream in unevenly
       // and make the visible model appear to bounce if sampled every tick.
-      const visualAlt = 80;
+      const visualAlt = 12;
       return Cesium.Cartesian3.fromDegrees(droneState.lon, droneState.lat, visualAlt);
     }
 
@@ -549,17 +558,17 @@ def dashboard():
       const constraints = mission.last_constraints || (sample && sample.constraints) || null;
       document.getElementById('control').textContent = JSON.stringify({rung3_action: action, constraints}, null, 2);
       if (followDrone) {
-        const backMeters = 520;
+        const backMeters = 32;
         const headingRad = Cesium.Math.toRadians(droneState.heading);
         const metersPerLat = 111320;
         const metersPerLon = 111320 * Math.max(0.1, Math.cos(Cesium.Math.toRadians(droneState.lat)));
         const camLat = droneState.lat - (Math.cos(headingRad) * backMeters / metersPerLat);
         const camLon = droneState.lon - (Math.sin(headingRad) * backMeters / metersPerLon);
         viewer.camera.setView({
-          destination: Cesium.Cartesian3.fromDegrees(camLon, camLat, 950),
+          destination: Cesium.Cartesian3.fromDegrees(camLon, camLat, 18),
           orientation: {
             heading: Cesium.Math.toRadians(droneState.heading),
-            pitch: Cesium.Math.toRadians(-52),
+            pitch: Cesium.Math.toRadians(-8),
             roll: 0
           }
         });
@@ -650,8 +659,30 @@ def dashboard():
       followDrone = !followDrone;
       document.getElementById('follow').textContent = followDrone ? 'Chase Drone' : 'Free Camera';
     });
+    document.getElementById('pause').addEventListener('click', async () => {
+      await fetch(`${SIM_BASE_URL}/api/sim/pause`, {method: 'POST'});
+      await refreshSimFeed();
+    });
+    document.getElementById('stop').addEventListener('click', async () => {
+      await fetch(`${SIM_BASE_URL}/api/sim/stop`, {method: 'POST'});
+      await refreshSimFeed();
+    });
     document.getElementById('return-home').addEventListener('click', async () => {
       await fetch(`${SIM_BASE_URL}/api/sim/return-home`, {method: 'POST'});
+      followDrone = true;
+      await refreshSimFeed();
+    });
+    document.getElementById('set-start').addEventListener('click', async () => {
+      const payload = {
+        lat: Number(document.getElementById('start-lat').value),
+        lon: Number(document.getElementById('start-lon').value),
+        altitude_m: Number(document.getElementById('start-alt').value)
+      };
+      await fetch(`${SIM_BASE_URL}/api/sim/set-start`, {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify(payload)
+      });
       followDrone = true;
       await refreshSimFeed();
     });
