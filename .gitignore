@@ -1,0 +1,28 @@
+.env
+__pycache__/
+*.pyc
+.venv/
+venv/
+.modal/
+
+# Downloaded/vendor dependency dumps and generated packages
+downloads/
+external/
+packages/
+
+# Unreal generated build output
+**/Binaries/
+**/Intermediate/
+**/Saved/
+**/DerivedDataCache/
+**/.vs/
+*.pdb
+*.debug
+*.sym
+*.obj
+*.o
+
+# Local caches and logs
+.pytest_cache/
+*.log
+md_files/Chat_logs.md
