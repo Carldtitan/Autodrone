@@ -130,7 +130,7 @@ SAFETY_CONFIG = {
     "max_demo_altitude_m": 1.83,
     "control_step_m": 0.75,
     "control_tick_s": 0.6,
-    "max_speed_mps": 5.0,
+    "max_speed_mps": 20.12,
 }
 
 
@@ -491,6 +491,11 @@ def _mission_snapshot() -> dict[str, Any]:
         return json.loads(json.dumps(_mission_state))
 
 
+def _mission_status() -> str:
+    with _mission_lock:
+        return str(_mission_state.get("status") or "idle")
+
+
 def _update_mission(**values: Any) -> dict[str, Any]:
     with _mission_lock:
         _mission_state.update(values)
@@ -568,6 +573,9 @@ def _fly_rung3_segment(client: Any, target: dict[str, float]) -> str:
     close_enough = max(0.03, float(os.getenv("MISSION_WAYPOINT_TOLERANCE_METERS", "2.0")) / _sim_to_city_scale())
     stagnant_ticks = 0
     while time.time() < timeout_at:
+        if _mission_status() in {"paused", "stopped"}:
+            client.hoverAsync().join()
+            return _mission_status()
         state = client.getMultirotorState()
         pos = state.kinematics_estimated.position
         action, distance = _rung3_action_for_target(pos, target, previous_distance)
@@ -633,6 +641,7 @@ def _reset_vehicle_to_low_home(client: Any) -> None:
         airsim.to_quaternion(0.0, 0.0, 0.0),
     )
     client.simSetVehiclePose(pose, False)
+    client.hoverAsync().join()
     time.sleep(0.4)
     _record_sample(client.getMultirotorState().kinematics_estimated.position)
 
