@@ -494,9 +494,6 @@ def dashboard():
       viewer.scene.globe.depthTestAgainstTerrain = false;
       viewer.scene.skyAtmosphere.show = true;
       viewer.scene.requestRenderMode = false;
-      addDroneModel();
-      await addCityTiles();
-      await addObstacles();
       viewer.camera.setView({
         destination: Cesium.Cartesian3.fromDegrees(origin.lon, origin.lat, 1450),
         orientation: {
@@ -505,6 +502,9 @@ def dashboard():
           roll: 0
         }
       });
+      addDroneModel();
+      addCityTiles();
+      addObstacles();
       return viewer;
     }
 
@@ -549,17 +549,20 @@ def dashboard():
       const constraints = mission.last_constraints || (sample && sample.constraints) || null;
       document.getElementById('control').textContent = JSON.stringify({rung3_action: action, constraints}, null, 2);
       if (followDrone) {
-        const center = droneBasePosition();
-        const transform = Cesium.Transforms.eastNorthUpToFixedFrame(center);
-        viewer.camera.lookAtTransform(
-          transform,
-          new Cesium.HeadingPitchRange(
-            Cesium.Math.toRadians(droneState.heading + 180),
-            Cesium.Math.toRadians(-24),
-            520
-          )
-        );
-        viewer.camera.lookAtTransform(Cesium.Matrix4.IDENTITY);
+        const backMeters = 520;
+        const headingRad = Cesium.Math.toRadians(droneState.heading);
+        const metersPerLat = 111320;
+        const metersPerLon = 111320 * Math.max(0.1, Math.cos(Cesium.Math.toRadians(droneState.lat)));
+        const camLat = droneState.lat - (Math.cos(headingRad) * backMeters / metersPerLat);
+        const camLon = droneState.lon - (Math.sin(headingRad) * backMeters / metersPerLon);
+        viewer.camera.setView({
+          destination: Cesium.Cartesian3.fromDegrees(camLon, camLat, 950),
+          orientation: {
+            heading: Cesium.Math.toRadians(droneState.heading),
+            pitch: Cesium.Math.toRadians(-52),
+            roll: 0
+          }
+        });
       }
     }
 

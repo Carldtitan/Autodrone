@@ -130,7 +130,7 @@ SAFETY_CONFIG = {
     "max_demo_altitude_m": 1.83,
     "control_step_m": 0.75,
     "control_tick_s": 0.6,
-    "max_speed_mps": 0.45,
+    "max_speed_mps": 5.0,
 }
 
 
