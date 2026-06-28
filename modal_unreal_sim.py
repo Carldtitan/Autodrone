@@ -732,6 +732,11 @@ def sim_api():
     class MissionRequest(BaseModel):
         request: str = "Fly to the Ferry Building and return safely"
         goal: str | None = None
+
+    class StartPositionRequest(BaseModel):
+        lat: float
+        lon: float
+        altitude_m: float = 1.83
     api.add_middleware(
         CORSMiddleware,
         allow_origins=["*"],
@@ -892,6 +897,61 @@ def sim_api():
         )
         threading.Thread(target=_run_flight_worker, args=(flight_id, req.request, resolved_goal["name"], route), daemon=True).start()
         return {"ok": True, "mission": _mission_snapshot()}
+
+    @api.post("/api/sim/stop")
+    def stop():
+        ping = _airsim_ping()
+        if not ping["ok"]:
+            raise HTTPException(status_code=409, detail=ping)
+        client = _airsim_client(timeout_value=10)
+        client.enableApiControl(True)
+        client.hoverAsync().join()
+        state = client.getMultirotorState()
+        _record_sample(state.kinematics_estimated.position)
+        _update_mission(status="stopped", completed_at=time.time(), error=None)
+        return {"ok": True, "mission": _mission_snapshot()}
+
+    @api.post("/api/sim/pause")
+    def pause():
+        ping = _airsim_ping()
+        if not ping["ok"]:
+            raise HTTPException(status_code=409, detail=ping)
+        client = _airsim_client(timeout_value=10)
+        client.enableApiControl(True)
+        client.hoverAsync().join()
+        state = client.getMultirotorState()
+        _record_sample(state.kinematics_estimated.position)
+        _update_mission(status="paused", completed_at=time.time(), error=None)
+        return {"ok": True, "mission": _mission_snapshot()}
+
+    @api.post("/api/sim/set-start")
+    def set_start(req: StartPositionRequest):
+        import airsim
+
+        ping = _airsim_ping()
+        if not ping["ok"]:
+            raise HTTPException(status_code=409, detail=ping)
+        client = _airsim_client(timeout_value=10)
+        client.enableApiControl(True)
+        client.armDisarm(True)
+        x, y = _geo_to_sim(req.lat, req.lon)
+        altitude = max(0.5, min(30.0, float(req.altitude_m)))
+        pose = airsim.Pose(airsim.Vector3r(x, y, -altitude), airsim.to_quaternion(0.0, 0.0, 0.0))
+        client.simSetVehiclePose(pose, False)
+        client.hoverAsync().join()
+        state = client.getMultirotorState()
+        _record_sample(state.kinematics_estimated.position)
+        _update_mission(
+            status="stopped",
+            request="Manual start position",
+            goal="manual",
+            resolved_goal={"name": "Manual start", "lat": req.lat, "lon": req.lon},
+            route=[],
+            samples=_mission_snapshot().get("samples", []),
+            completed_at=time.time(),
+            error=None,
+        )
+        return {"ok": True, "mission": _mission_snapshot(), "geo": _state_to_geo(state.kinematics_estimated.position)}
 
     @api.post("/api/sim/return-home")
     def return_home():
